@@ -186,7 +186,7 @@ window.enviarWppB2C = function(id) {
     const pin = cli?.pin || os.pin || '';
 
     // ✅ Link correto para GitHub Pages
-    const link = 'https://tsvalencio-ia.github.io/oficina1/cliente.html';
+    const link = 'https://tsvalencio-ia.github.io/thIAguinhoERP/cliente.html';
 
     const totalFmt = (os.total || 0).toFixed(2).replace('.', ',');
 
