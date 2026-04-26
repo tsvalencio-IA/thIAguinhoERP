@@ -944,13 +944,15 @@ body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(
     <div class="form-group">
       <label class="j-label">Diagnóstico Técnico (Interno)</label>
       <textarea class="j-textarea" id="osDiagnostico" rows="2" placeholder="Diagnóstico da equipe técnica após avaliação..."></textarea>
-      <button type="button" class="btn-ghost" onclick="window._tempaSugerir()" style="margin-top:8px;font-size:0.72rem;padding:6px 12px;">📖 Sugerir tempos (Tabela Tempária SINDIREPA-SP)</button>
     </div>
 
     <div style="background:var(--surf3);border:1px solid rgba(0,212,255,0.15);border-radius:3px;padding:18px;margin-top:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div style="font-family:var(--fd);font-size:1rem;font-weight:700;color:var(--cyan);">SERVIÇOS / MÃO DE OBRA</div>
-        <button type="button" class="btn-outline" onclick="window.adicionarServicoOS()">+ ADICIONAR SERVIÇO</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" class="btn-ghost" onclick="window._tempaSugerir()" style="font-size:0.7rem;padding:6px 10px;background:rgba(0,212,255,0.08);" title="Cruza os serviços com a Tabela Tempária SINDIREPA-SP e preenche valores automaticamente baseado em (tempo padrão × R$/hora-mecânica)">📖 SUGERIR TEMPOS (TABELA)</button>
+          <button type="button" class="btn-outline" onclick="window.adicionarServicoOS()">+ ADICIONAR SERVIÇO</button>
+        </div>
       </div>
       <div id="containerServicosOS" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;"></div>
     </div>
