@@ -214,65 +214,108 @@
   };
 
   // ───────────────────────────────────────────────────────────────
-  // INTEGRAÇÃO COM A O.S. — botão "Sugerir Tempo (Tabela Tempária)"
+  // INTEGRAÇÃO COM A O.S. — automática: lê serviços lançados,
+  // cruza com a Tabela Tempária, e preenche os valores baseados em
+  // (tempo padrão × valor da hora-mecânica da oficina).
   // ───────────────────────────────────────────────────────────────
   window.tempaSugerirParaOS = async function() {
     if (!TT.carregada) {
       try { await window.tempaCarregar(); }
-      catch(e) { if (window.toast) window.toast('⚠ Tabela Tempária não carregada', 'err'); return; }
+      catch(e) {
+        if (window.toast) window.toast('⚠ Tabela Tempária não carregou. Verifique se data/tabela-tempa.min.json está no GitHub Pages.', 'err');
+        return;
+      }
     }
-    // Pega o que está no campo "Defeito" ou "Diagnóstico" da OS
-    const defeito = (document.getElementById('osDescricao')?.value || '').trim();
-    const diag = (document.getElementById('osDiagnostico')?.value || '').trim();
-    const referencia = diag || defeito;
-    if (!referencia) {
-      if (window.toast) window.toast('Preencha o defeito ou diagnóstico antes de sugerir tempos', 'warn');
+
+    // 1. Lê todos os serviços já lançados na O.S.
+    const linhas = document.querySelectorAll('#containerServicosOS > div');
+    if (linhas.length === 0) {
+      if (window.toast) window.toast('⚠ Nenhum serviço lançado ainda. Adicione pelo menos um serviço antes de sugerir tempos.', 'warn');
       return;
     }
-    const resultados = window.tempaBuscarPorTexto(referencia, { limite: 10 });
-    if (resultados.length === 0) {
-      if (window.toast) window.toast('⚠ Nenhum tempo encontrado na tabela. Tente termos diferentes.', 'warn');
-      return;
+
+    // 2. Pergunta o valor da hora mecânica (uma vez por sessão)
+    let valorHora = parseFloat(sessionStorage.getItem('thiaguinho_valorHoraMec') || '0');
+    if (!valorHora || valorHora <= 0) {
+      const resp = prompt(
+        '💡 Para sugerir valores, informe o valor da hora-mecânica da sua oficina:\n\n' +
+        '(Sugestão regional: R$ 100 a R$ 180 por hora)\n\n' +
+        'Digite só o número, ex: 120',
+        '120'
+      );
+      if (!resp) return;
+      valorHora = parseFloat(resp.replace(',', '.'));
+      if (!valorHora || valorHora <= 0) {
+        if (window.toast) window.toast('Valor inválido. Digite um número maior que zero.', 'err');
+        return;
+      }
+      sessionStorage.setItem('thiaguinho_valorHoraMec', String(valorHora));
     }
-    // Mostra modal simples com os resultados
-    const html = `
-      <div style="padding:14px;">
-        <div style="font-family:var(--fm);font-size:0.7rem;color:var(--muted);margin-bottom:10px;">
-          ${resultados.length} sugestões da Tabela Tempária baseadas em: "<em>${_esc(referencia.substring(0,80))}</em>"
-        </div>
-        <table class="j-table" style="font-size:0.78rem;">
-          <thead><tr><th>Sistema</th><th>Operação</th><th>Item</th><th style="width:80px;text-align:right;">Tempo</th></tr></thead>
-          <tbody>
-            ${resultados.map(it => `<tr>
-              <td>${_esc(it.sistema.substring(0,30))}</td>
-              <td><small style="color:var(--warn);">${_esc(it.operacao)}</small></td>
-              <td>${_esc(it.item)}</td>
-              <td style="text-align:right;color:var(--success);font-weight:700;">${it.tempo.toFixed(2).replace('.', ',')}h<br><small>${_hToHHmm(it.tempo)}</small></td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-    // Cria um modal volátil
-    let modal = document.getElementById('modalTempaSugest');
-    if (!modal) {
-      modal = document.createElement('div');
-      modal.id = 'modalTempaSugest';
-      modal.className = 'modal-overlay';
-      modal.innerHTML = `
-        <div class="modal" style="max-width:760px;">
-          <div class="modal-head">
-            <div class="modal-title">📖 Sugestões da Tabela Tempária</div>
-            <button class="modal-close" onclick="document.getElementById('modalTempaSugest').classList.remove('open')">✕</button>
-          </div>
-          <div class="modal-body" id="modalTempaSugestBody"></div>
-          <div class="modal-foot">
-            <button class="btn-ghost" onclick="document.getElementById('modalTempaSugest').classList.remove('open')">FECHAR</button>
-          </div>
-        </div>`;
-      document.body.appendChild(modal);
+
+    // 3. Para cada linha, busca na Tabela e preenche o valor
+    let preenchidas = 0;
+    let naoEncontradas = [];
+    const detalhes = [];
+
+    linhas.forEach((row, idx) => {
+      const inputDesc = row.querySelector('.serv-desc');
+      const inputValor = row.querySelector('.serv-valor');
+      if (!inputDesc || !inputValor) return;
+
+      const desc = (inputDesc.value || '').trim();
+      if (!desc) return;
+
+      // Busca o item mais relevante na Tabela
+      const resultados = window.tempaBuscarPorTexto(desc, { limite: 1 });
+
+      if (resultados.length > 0) {
+        const item = resultados[0];
+        const tempo = item.tempo;             // horas
+        const valorSugerido = tempo * valorHora;
+
+        // Preenche valor APENAS se estiver vazio ou zero (não sobrescreve valor manual)
+        const valorAtual = parseFloat(inputValor.value || 0);
+        if (valorAtual <= 0) {
+          inputValor.value = valorSugerido.toFixed(2);
+          // Adiciona dica visual sobre o tempo no descritivo
+          if (!desc.toLowerCase().includes('h)') && !desc.toLowerCase().includes('horas')) {
+            const tempoTxt = tempo >= 1 ? `${tempo.toFixed(1).replace('.', ',')}h` : `${Math.round(tempo*60)}min`;
+            inputDesc.value = `${desc} (${tempoTxt})`;
+          }
+          preenchidas++;
+          detalhes.push(`✓ "${desc.substring(0,40)}" → ${tempo}h × R$${valorHora} = R$${valorSugerido.toFixed(2)}`);
+        } else {
+          detalhes.push(`= "${desc.substring(0,40)}" já tinha valor R$${valorAtual.toFixed(2)} (mantido)`);
+        }
+      } else {
+        naoEncontradas.push(desc.substring(0, 40));
+        detalhes.push(`✗ "${desc.substring(0,40)}" não encontrado na Tabela`);
+      }
+    });
+
+    // 4. Recalcula total
+    if (typeof window.calcOSTotal === 'function') window.calcOSTotal();
+
+    // 5. Feedback completo
+    if (preenchidas === 0 && naoEncontradas.length === 0) {
+      if (window.toast) window.toast('Todos os serviços já tinham valor preenchido. Nada alterado.', 'warn');
+    } else if (preenchidas > 0 && naoEncontradas.length === 0) {
+      if (window.toast) window.toast(`✓ ${preenchidas} serviço(s) preenchido(s) com tempos da Tabela Tempária. Valor hora: R$${valorHora.toFixed(2)}`, 'ok');
+    } else if (preenchidas > 0 && naoEncontradas.length > 0) {
+      const aviso = `✓ ${preenchidas} preenchido(s).\n⚠ ${naoEncontradas.length} não encontrado(s):\n${naoEncontradas.slice(0,3).join('\n')}${naoEncontradas.length > 3 ? '\n...' : ''}`;
+      alert(aviso);
+    } else {
+      alert(`⚠ Nenhum serviço encontrado na Tabela Tempária.\n\nServiços testados:\n${naoEncontradas.slice(0,5).join('\n')}\n\nDica: use termos como "pastilha", "embreagem", "amortecedor", "bomba".`);
     }
-    document.getElementById('modalTempaSugestBody').innerHTML = html;
-    modal.classList.add('open');
+
+    // Log detalhado no console pra auditoria
+    console.log('[Tabela Tempária] Aplicação:\n' + detalhes.join('\n'));
+  };
+
+  // Helper para o gestor RESETAR o valor da hora (caso queira mudar)
+  window.tempaResetarValorHora = function() {
+    sessionStorage.removeItem('thiaguinho_valorHoraMec');
+    if (window.toast) window.toast('Valor da hora resetado. Próxima sugestão vai perguntar de novo.', 'ok');
   };
 
   // ───────────────────────────────────────────────────────────────
